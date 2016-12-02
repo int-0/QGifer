@@ -19,6 +19,8 @@
 
 #include "gifcreator.h"
 #include <cstring>
+#include <stdbool.h>
+#define FALSE false
 
 #include <iostream>
 using namespace std;
@@ -38,7 +40,7 @@ GifCreator::~GifCreator()
 		    j--;
 	       }
      for(int i=0;i<cmaps.size();i++)
-	  FreeMapObject(cmaps[i]);
+	  GifFreeMapObject(cmaps[i]);
 }
 
 
@@ -51,19 +53,19 @@ bool GifCreator::save(const char* filename, int every)
 	  return false;
      }
   
-  
-     GifFileType *GifFile = EGifOpenFileName(filename, FALSE);
+     int gerror;
+     GifFileType *GifFile = EGifOpenFileName(filename, FALSE, &gerror);
   
      if (!GifFile){
-	  PrintGifError();
-	  return false;
+          printf ("GIF error: '%s'", GifErrorString(gerror));
+          return false;
      }
 
-     if (EGifPutScreenDesc(
-	      GifFile,
-	      w, h, colorRes, 0, cmaps.size() > 1 ? NULL : cmaps.at(0)
-	      ) == GIF_ERROR){
-	  PrintGifError();
+     gerror = EGifPutScreenDesc(GifFile,
+				w, h, colorRes, 0,
+				cmaps.size() > 1 ? NULL : cmaps.at(0));
+     if ( gerror == GIF_ERROR){
+          printf ("GIF error: '%s'", GifErrorString(gerror));
 	  return false;
      }
 
@@ -72,18 +74,21 @@ bool GifCreator::save(const char* filename, int every)
      int loop_count;
      loop_count=0;
      {
-	  char nsle[12] = "NETSCAPE2.0";
+          // char nsle[12] = "NETSCAPE2.0";
 	  char subblock[3];
-	  if (EGifPutExtensionFirst(GifFile, APPLICATION_EXT_FUNC_CODE, 11, nsle) == GIF_ERROR) {
-	       PrintGifError();
+	  gerror = EGifPutExtensionLeader(GifFile,
+					  APPLICATION_EXT_FUNC_CODE);
+	  if ( gerror == GIF_ERROR) {
+	       printf ("GIF error: '%s'", GifErrorString(gerror));
 	       return false;
 	  }
 	  subblock[0] = 1;
 	  subblock[2] = loop_count % 256;
 	  subblock[1] = loop_count / 256;
 
-	  if (EGifPutExtensionLast(GifFile, APPLICATION_EXT_FUNC_CODE, 3, subblock) == GIF_ERROR) {
-	       PrintGifError();
+	  gerror = EGifPutExtensionTrailer(GifFile);
+	  if ( gerror == GIF_ERROR) {
+	       printf ("GIF error: '%s'", GifErrorString(gerror));
 	       return false;
 	  }
  
@@ -110,21 +115,22 @@ bool GifCreator::save(const char* filename, int every)
 
 	  /* Dump graphics control block. */
 	  EGifPutExtension(GifFile, GRAPHICS_EXT_FUNC_CODE, 4, ExtStr);
-            
-	  if (EGifPutImageDesc(
-		   GifFile,
-		   0, 0, w, h, FALSE, cmaps.size() > ni ? cmaps.at(ni) : cmaps.at(cmaps.size()-1)
-		   ) == GIF_ERROR) {
 
-	       PrintGifError();
+	  gerror = EGifPutImageDesc(GifFile,
+				    0, 0, w, h, FALSE,
+				    cmaps.size() > ni ? cmaps.at(ni) : cmaps.at(cmaps.size()-1));
+	  
+	  if ( gerror == GIF_ERROR) {
+	       printf ("GIF error: '%s'", GifErrorString(gerror));
 	       endProgress();
 	       return false;
 	  }
        
        
 	  for (int y = 0, j=(h-1)*w; y < h; y++, j-=w) {
-	       if (EGifPutLine(GifFile, &(frames[ni][j]), w) == GIF_ERROR){
-		    PrintGifError();
+	       gerror = EGifPutLine(GifFile, &(frames[ni][j]), w);
+	       if ( gerror == GIF_ERROR){
+		    printf ("GIF error: '%s'", GifErrorString(gerror));
 		    endProgress();
 		    return false;
 	       }
@@ -132,14 +138,17 @@ bool GifCreator::save(const char* filename, int every)
      }
 
      //comment
-     if(EGifPutComment(GifFile,"This GIF file was created using QGifer") == GIF_ERROR){
-	  PrintGifError();
+     gerror = EGifPutComment(GifFile,
+			     "This GIF file was created using QGifer");
+     if( gerror == GIF_ERROR){
+	  printf ("GIF error: '%s'", GifErrorString(gerror));
 	  endProgress();
 	  return false;
      }
-   
-     if (EGifCloseFile(GifFile) == GIF_ERROR) {
-	  PrintGifError();
+
+     EGifCloseFile(GifFile, &gerror);
+     if ( gerror == GIF_ERROR) {
+	  printf ("GIF error: '%s'",  GifErrorString(gerror));
 	  endProgress();
 	  return false;
      }
